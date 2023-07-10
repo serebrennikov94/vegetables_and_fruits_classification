@@ -1,15 +1,26 @@
 from flask import Flask, render_template, request, session, flash, redirect
 import os
 from utils import predict, allowed_file
-import torch
+import torch 
+import gdown 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model = torch.load(BASE_DIR + '/model.pth', map_location='cpu')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # base directory
 
-app = Flask(__name__)
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static/uploads')
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.secret_key = 'xyz'
+file_id = '1FFOZhmdAivlRzkYEC1XDbwpBKJgNnYPX' # pretrained model in google drive
+output = BASE_DIR + '/model.pth' # path for downloading model 
+if os.path.exists(output): 
+    print('Model exists!') 
+else:
+    print("Model doesn't exist. \nDownloading the model from google drive...")
+    gdown.download(id=file_id, output=output, quiet=False) # start downloading model from google drive
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu' # set device 
+model = torch.load(BASE_DIR + '/model.pth', map_location=device) # set pretrained model
+
+app = Flask(__name__) # initialize flask app
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static/uploads') # folder for saving user images 
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER 
+app.secret_key = 'xyz' 
 
 
 @app.route('/')
@@ -20,27 +31,22 @@ def main():
 @app.route('/', methods=["POST"])
 def upload_file():
     error = ''
-    target_img = os.path.join(os.getcwd(), 'static/uploads')
-    print(target_img)
-    if request.method == 'POST':
-        print(1)
+    target_img = os.path.join(os.getcwd(), 'static/uploads') # directory for saving user images
+    if request.method == 'POST': 
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
-        print(2)
-        file = request.files['file']
-        # file = request.form.get("file", False)
-        if file.filename == '':
+        file = request.files['file'] # get user image
+        if file.filename == '': 
             flash('No selected file')
             return redirect(request.url)
         if file and allowed_file(file.filename):
-            print('ok')
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
-            img_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-            img_show_path = os.path.join('/static/uploads', file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename)) # save user image
+            img_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename) # path to user image
+            img_show_path = os.path.join('/static/uploads', file.filename) 
             session['uploaded_img_file_path'] = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
 
-            prob_result, class_result = predict(img_path, model)
+            prob_result, class_result = predict(img_path, model) # get predictions 
 
             predictions = {
                 "class1": class_result[0],
@@ -67,6 +73,5 @@ def upload_file():
 
 
 if __name__ == '__main__':
-    # app.run(debug=True)
     port = int(os.environ.get('PORT', 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=False, host='0.0.0.0', port=port)
